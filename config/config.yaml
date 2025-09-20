@@ -1,0 +1,441 @@
+# ========================================
+# Medical Image Analysis - Main Configuration
+# ========================================
+
+# Project Information
+project:
+  name: "Medical Image Analysis RAG System"
+  version: "1.0.0"
+  description: "CNN + RAG pipeline for medical image diagnosis"
+  author: "Medical AI Team"
+
+# Data Paths Configuration
+data_paths:
+  # Root directories
+  root: "./data"
+  raw_data: "./data/raw"
+  processed_data: "./data/processed"
+  embeddings: "./data/embeddings"
+  medical_literature: "./data/medical_literature"
+  
+  # Dataset-specific paths
+  chest_xray:
+    train: "./data/raw/chest_xray/train"
+    val: "./data/raw/chest_xray/val"
+    test: "./data/raw/chest_xray/test"
+    processed: "./data/processed/chest_xray"
+  
+  skin_lesion:
+    train: "./data/raw/skin_lesion/train"
+    val: "./data/raw/skin_lesion/val"
+    test: "./data/raw/skin_lesion/test"
+    processed: "./data/processed/skin_lesion"
+    metadata: "./data/raw/skin_lesion/HAM10000_metadata.csv"
+  
+  brain_tumor:
+    train: "./data/raw/brain_tumor/train"
+    val: "./data/raw/brain_tumor/val"
+    test: "./data/raw/brain_tumor/test"
+    processed: "./data/processed/brain_tumor"
+  
+  # Literature paths
+  literature:
+    papers: "./data/medical_literature/papers"
+    case_studies: "./data/medical_literature/case_studies"
+    embeddings: "./data/embeddings/literature"
+
+# Model Settings
+model_settings:
+  # Model save directory
+  save_dir: "./models/saved_models"
+  checkpoint_dir: "./models/checkpoints"
+  
+  # Common settings
+  input_size: 224  # Default image size
+  batch_size: 32
+  num_workers: 4
+  prefetch_factor: 2
+  
+  # Chest X-Ray Model
+  chest_xray:
+    architecture: "ResNet50"
+    input_shape: [224, 224, 3]
+    num_classes: 2
+    class_names: ["NORMAL", "PNEUMONIA"]
+    weights: "imagenet"
+    freeze_layers: 100
+    dropout_rate: 0.5
+  
+  # Skin Lesion Model
+  skin_lesion:
+    architecture: "EfficientNetB0"
+    input_shape: [224, 224, 3]
+    num_classes: 7
+    class_names: ["MEL", "NV", "BCC", "AKIEC", "BKL", "DF", "VASC"]
+    weights: "imagenet"
+    freeze_layers: 150
+    dropout_rate: 0.3
+  
+  # Brain Tumor Model
+  brain_tumor:
+    architecture: "DenseNet121"
+    input_shape: [224, 224, 3]
+    num_classes: 4
+    class_names: ["glioma", "meningioma", "pituitary", "no_tumor"]
+    weights: "imagenet"
+    freeze_layers: 200
+    dropout_rate: 0.4
+
+# Training Configuration
+training:
+  # Optimizer settings
+  optimizer:
+    type: "Adam"
+    learning_rate: 0.001
+    beta_1: 0.9
+    beta_2: 0.999
+    epsilon: 1.0e-7
+    weight_decay: 0.0001
+  
+  # Learning rate schedule
+  lr_schedule:
+    type: "ReduceLROnPlateau"
+    monitor: "val_loss"
+    factor: 0.5
+    patience: 5
+    min_lr: 1.0e-7
+  
+  # Training parameters
+  epochs: 100
+  batch_size: 32
+  validation_split: 0.2
+  
+  # Early stopping
+  early_stopping:
+    monitor: "val_accuracy"
+    patience: 15
+    restore_best_weights: true
+    min_delta: 0.001
+  
+  # Data augmentation
+  augmentation:
+    enabled: true
+    rotation_range: 20
+    width_shift_range: 0.2
+    height_shift_range: 0.2
+    horizontal_flip: true
+    vertical_flip: false
+    zoom_range: 0.2
+    shear_range: 0.1
+    fill_mode: "nearest"
+  
+  # Class weighting
+  class_weights:
+    enabled: true
+    method: "balanced"  # balanced, custom, or none
+  
+  # Mixed precision training
+  mixed_precision: true
+  
+  # Checkpointing
+  checkpoint:
+    save_best_only: true
+    monitor: "val_accuracy"
+    mode: "max"
+    save_frequency: "epoch"
+
+# RAG Pipeline Configuration
+rag_pipeline:
+  # Embedding settings
+  embeddings:
+    model: "sentence-transformers/all-MiniLM-L6-v2"
+    dimension: 384
+    batch_size: 32
+    max_sequence_length: 512
+    
+    # Medical domain embeddings (alternative)
+    medical_model: "microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract"
+    use_medical_model: true
+  
+  # Chunking strategy
+  chunking:
+    strategy: "semantic"  # sentence, paragraph, semantic, or fixed
+    chunk_size: 512
+    chunk_overlap: 50
+    min_chunk_size: 100
+    max_chunk_size: 1000
+  
+  # Retrieval settings
+  retrieval:
+    top_k: 5
+    similarity_threshold: 0.75
+    search_type: "similarity"  # similarity, mmr, or hybrid
+    fetch_k: 20  # for MMR
+    lambda_mult: 0.5  # for MMR
+  
+  # Reranking
+  reranking:
+    enabled: true
+    model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    top_n: 3
+  
+  # Generation settings
+  generation:
+    model: "gpt-4-turbo-preview"  # or claude-3-sonnet-20240229
+    max_tokens: 2000
+    temperature: 0.3
+    top_p: 0.95
+    frequency_penalty: 0.0
+    presence_penalty: 0.0
+    
+    # System prompt
+    system_prompt: |
+      You are a medical AI assistant providing diagnostic support.
+      Analyze the provided medical information and generate a comprehensive report.
+      Include relevant medical literature citations and similar case references.
+      Always maintain HIPAA compliance and patient privacy.
+
+# Pinecone Configuration
+pinecone:
+  environment: "us-east-1-aws"
+  index_name: "medical-literature-index"
+  dimension: 384
+  metric: "cosine"
+  pod_type: "p1.x1"
+  replicas: 1
+  
+  # Namespace organization
+  namespaces:
+    chest_xray: "chest-xray-cases"
+    skin_lesion: "skin-lesion-cases"
+    brain_tumor: "brain-tumor-cases"
+    literature: "medical-literature"
+    case_studies: "clinical-cases"
+
+# API Configuration
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  reload: true  # Development only
+  log_level: "info"
+  
+  # CORS settings
+  cors:
+    enabled: true
+    origins:
+      - "http://localhost:3000"
+      - "http://localhost:8501"
+      - "https://yourdomain.com"
+    methods: ["GET", "POST", "PUT", "DELETE"]
+    headers: ["*"]
+
+  rate_limit:
+    enabled: true
+    requests_per_minute: 60
+    requests_per_hour: 1000
+
+  upload:
+    max_file_size: 10485760  # 10MB in bytes
+    allowed_extensions: [".jpg", ".jpeg", ".png", ".dcm", ".nii", ".nii.gz"]
+    temp_dir: "./temp/uploads"
+
+  auth:
+    enabled: false  # Set to true in production
+    secret_key: "${SECRET_KEY}"
+    algorithm: "HS256"
+    access_token_expire_minutes: 60
+
+# Frontend Configuration
+frontend:
+  streamlit:
+    port: 8501
+    server_address: "localhost"
+    theme: "light"
+    max_upload_size: 10  # MB
+    
+  # UI settings
+  ui:
+    show_confidence_score: true
+    show_similar_cases: true
+    max_similar_cases: 3
+    show_explainability: true
+    enable_feedback: true
+
+# Logging Configuration
+logging:
+  version: 1
+  disable_existing_loggers: false
+  
+  formatters:
+    default:
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+      datefmt: "%Y-%m-%d %H:%M:%S"
+    
+    detailed:
+      format: "%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"
+  
+  handlers:
+    console:
+      class: "logging.StreamHandler"
+      level: "INFO"
+      formatter: "default"
+      stream: "ext://sys.stdout"
+    
+    file:
+      class: "logging.handlers.RotatingFileHandler"
+      level: "DEBUG"
+      formatter: "detailed"
+      filename: "logs/app.log"
+      maxBytes: 10485760  # 10MB
+      backupCount: 5
+    
+    error_file:
+      class: "logging.handlers.RotatingFileHandler"
+      level: "ERROR"
+      formatter: "detailed"
+      filename: "logs/error.log"
+      maxBytes: 10485760
+      backupCount: 3
+  
+  loggers:
+    "":
+      level: "INFO"
+      handlers: ["console", "file"]
+      propagate: false
+    
+    "uvicorn":
+      level: "INFO"
+      handlers: ["console"]
+      propagate: false
+    
+    "tensorflow":
+      level: "WARNING"
+      handlers: ["console"]
+      propagate: false
+
+# Database Configuration
+database:
+  type: "postgresql"
+  host: "localhost"
+  port: 5432
+  name: "medical_image_db"
+  user: "${DB_USER}"
+  password: "${DB_PASSWORD}"
+  
+  # Connection pool
+  pool_size: 10
+  max_overflow: 20
+  pool_timeout: 30
+  pool_recycle: 3600
+
+# Redis Cache Configuration
+cache:
+  enabled: true
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: "${REDIS_PASSWORD}"
+  ttl: 3600  # Default TTL in seconds
+  
+  # Cache keys
+  keys:
+    predictions: "prediction:{image_hash}"
+    embeddings: "embedding:{text_hash}"
+    reports: "report:{case_id}"
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  
+  # Prometheus metrics
+  prometheus:
+    enabled: true
+    port: 9090
+    endpoint: "/metrics"
+  
+  # Health checks
+  health_check:
+    interval: 30  # seconds
+    timeout: 5
+    
+  # Performance tracking
+  mlflow:
+    enabled: true
+    tracking_uri: "http://localhost:5000"
+    experiment_name: "medical-image-classification"
+  
+  wandb:
+    enabled: false
+    project: "medical-image-rag"
+    entity: "${WANDB_ENTITY}"
+
+# Security & Compliance
+security:
+  # HIPAA compliance
+  hipaa_compliant: true
+  anonymize_data: true
+  encrypt_at_rest: true
+  audit_logging: true
+  
+  # Data retention
+  data_retention_days: 90
+  automatic_deletion: true
+  
+  # SSL/TLS
+  ssl_enabled: false  # Enable in production
+  ssl_cert_path: "/path/to/cert.pem"
+  ssl_key_path: "/path/to/key.pem"
+
+features:
+  enable_rag: true
+  enable_confidence_threshold: true
+  confidence_threshold: 0.70
+  enable_explainability: true
+  enable_similar_cases: true
+  enable_batch_processing: false
+  enable_model_ensemble: false
+
+performance:
+  use_gpu: true
+  gpu_memory_fraction: 0.8
+  mixed_precision: true
+  xla_optimization: true
+  
+  # Caching
+  cache_predictions: true
+  cache_embeddings: true
+  
+  # Parallel processing
+  max_workers: 4
+  prefetch_size: 2
+
+# Testing Configuration
+testing:
+  test_data_path: "./tests/test_data"
+  mock_api_calls: false
+  enable_profiling: false
+  pytest_workers: 4
+  coverage_threshold: 80  # percentage
+
+deployment:
+  environment: "development"  # development, staging, production
+  
+  docker:
+    registry: "your-registry.com"
+    image_name: "medical-image-rag"
+    tag: "latest"
+  
+  kubernetes:
+    namespace: "medical-ai"
+    replicas: 3
+    auto_scaling:
+      enabled: true
+      min_replicas: 2
+      max_replicas: 10
+      target_cpu_percent: 70
+
+  endpoints:
+    health: "/health"
+    ready: "/ready"
+    metrics: "/metrics"
